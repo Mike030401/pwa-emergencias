@@ -15,7 +15,8 @@ const app = express();
 //    Apuntamos a la carpeta superior (el directorio del proyecto PWA-EMERGENCIAS) 
 //    para encontrar index.html, app.js, service-worker.js, y la carpeta public.
 //    '..' sube un directorio desde la ubicación actual de sendPush.js
-app.use(express.static(path.join(__dirname, '..'))); 
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+app.use(express.static(PUBLIC_DIR)); 
 
 app.use(cors());
 app.use(bodyParser.json());
