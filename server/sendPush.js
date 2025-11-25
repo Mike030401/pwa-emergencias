@@ -8,23 +8,12 @@ require('dotenv').config();
 
 const app = express();
 
-// ======================================
-//   CONFIGURACIÓN DE MIDDLEWARE Y RUTAS
-// ======================================
-// 1. SERVIR ARCHIVOS ESTÁTICOS
-//    Apuntamos a la carpeta superior (el directorio del proyecto PWA-EMERGENCIAS) 
-//    para encontrar index.html, app.js, service-worker.js, y la carpeta public.
-//    '..' sube un directorio desde la ubicación actual de sendPush.js
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 app.use(express.static(PUBLIC_DIR)); 
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// ==============================
-//   CONFIG VAPID KEYS
-// ... (resto del código de configuración VAPID)
-// ==============================
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE;
 
@@ -39,18 +28,12 @@ webpush.setVapidDetails(
     VAPID_PRIVATE
 );
 
-// ==============================
-//   ESTADO Y DATOS DE MOCK
-// ==============================
 let subscriptions = [];
 let incidents = [
     { id: 1, title: "Accidente vehicular", description: "Choque en Avenida Central, unidad de bomberos enviada." },
     { id: 2, title: "Fuego menor", description: "Lote baldío con quema controlada. Monitoreo policial." }
 ];
 
-// ==============================
-//   RUTAS DE API
-// ==============================
 
 app.get("/vapidPublicKey", (req, res) => {
     res.send(VAPID_PUBLIC);
@@ -76,6 +59,27 @@ app.post("/api/notify-all", async (req, res) => {
         icon: "/icons/icon-192.png"
     });
 
+app.get("/api/send-test", async (req, res) => {
+    const payload = JSON.stringify({
+        title: "🔔 PRUEBA EXITOSA",
+        body: "¡Las notificaciones Push funcionan correctamente!",
+        icon: "/icons/icon-192.png"
+    });
+
+    try {
+        const results = await Promise.allSettled(
+            subscriptions.map(s => webpush.sendNotification(s, payload))
+        );
+        subscriptions = subscriptions.filter((_, i) => results[i].status === "fulfilled");
+        const successCount = results.filter(r => r.status === "fulfilled").length;
+        console.log(`📢 Prueba de Notificación enviada. Éxitos: ${successCount}`);
+        res.json({ ok: true, message: `Prueba enviada a ${subscriptions.length} suscriptores.` });
+    } catch (error) {
+        console.error("❌ Error al enviar la notificación de prueba:", error);
+        res.status(500).json({ ok: false, error: "Error al enviar la prueba" });
+    }
+});
+
     const results = await Promise.allSettled(
         subscriptions.map(s => webpush.sendNotification(s, payload))
     );
@@ -84,9 +88,6 @@ app.post("/api/notify-all", async (req, res) => {
     res.json({ ok: true });
 });
 
-// ==============================
-//   LEVANTAR SERVIDOR
-// ==============================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => console.log(`🚀 Servidor Push iniciado en puerto ${PORT}`));
