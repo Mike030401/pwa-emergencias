@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Emergencias - Operador</title>
+
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- iOS support -->
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+</head>
+<body>
+
+    <header>
+        <h1>🚨 Centro de Control de Emergencias</h1>
+        <button id="subscribeBtn">🔔 Activar Notificaciones</button>
+    </header>
+
+    <main id="content">
+        <h2>Emergencias activas</h2>
+        <ul id="incidentList"></ul>
+    </main>
+
+    <footer>
+        <p>PWA Emergencias • Modo Operador</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
