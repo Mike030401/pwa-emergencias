@@ -59,6 +59,14 @@ app.post("/api/notify-all", async (req, res) => {
         icon: "/icons/icon-192.png"
     });
 
+    const results = await Promise.allSettled(
+        subscriptions.map(s => webpush.sendNotification(s, payload))
+    );
+    subscriptions = subscriptions.filter((_, i) => results[i].status === "fulfilled");
+    console.log("📢 Notificaciones enviadas:", results.length);
+    res.json({ ok: true });
+});
+
 app.get("/api/send-test", async (req, res) => {
     const payload = JSON.stringify({
         title: "🔔 PRUEBA EXITOSA",
@@ -78,14 +86,6 @@ app.get("/api/send-test", async (req, res) => {
         console.error("❌ Error al enviar la notificación de prueba:", error);
         res.status(500).json({ ok: false, error: "Error al enviar la prueba" });
     }
-});
-
-    const results = await Promise.allSettled(
-        subscriptions.map(s => webpush.sendNotification(s, payload))
-    );
-    subscriptions = subscriptions.filter((_, i) => results[i].status === "fulfilled");
-    console.log("📢 Notificaciones enviadas:", results.length);
-    res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 3000;
