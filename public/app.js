@@ -64,7 +64,7 @@ async function renderIncidents(data) {
 
     data.forEach(item => {
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${item.titulo}</strong><br>${item.descripcion}`;
+        li.innerHTML = `<strong>${item.title}</strong><br>${item.description}`;
         list.appendChild(li);
     });
 }
