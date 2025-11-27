@@ -624,33 +624,46 @@
         return Uint8Array.from([...rawData].map(ch => ch.charCodeAt(0)));
     }
 
-    async function subscribeToPush() {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            showModal('Push', 'Notificaciones no soportadas en este navegador');
-            return;
-        }
-        const btn = $('btn-activate-push'); if (btn) { btn.disabled = true; btn.textContent = 'Suscribiendo...'; }
-        try {
-            const reg = await navigator.serviceWorker.ready;
-            const vapid = await getVapidPublicKey();
-            if (!vapid) { showModal('Push', 'Clave VAPID no disponible'); return; }
+async function subscribeToPush() {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+            showModal('Push', 'Notificaciones no soportadas en este navegador');
+            return;
+        }
+        const btn = $('btn-activate-push'); if (btn) { btn.disabled = true; btn.textContent = 'Suscribiendo...'; }
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const vapid = await getVapidPublicKey();
+            if (!vapid) { showModal('Push', 'Clave VAPID no disponible'); return; }
 
-            const sub = await reg.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapid)
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapid)
+            });
+
+            // INICIO DE LA MODIFICACIÓN
+            const response = await fetch(API.subscribe, { 
+                method: 'POST', 
+                headers: {'content-type':'application/json'}, 
+                body: JSON.stringify(sub) 
             });
 
-            await fetch(API.subscribe, { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(sub) });
+            if (!response.ok) {
+                // Captura el mensaje de error del servidor (si lo hay)
+                const errorText = await response.text();
+                // Lanza un error explícito al bloque catch con el código de estado
+                throw new Error(`Error ${response.status} en el servidor: ${errorText.substring(0, 100)}...`);
+            }
+            // FIN DE LA MODIFICACIÓN
 
-            showModal('Push', 'Suscripción creada correctamente');
-            const sendBtn = $('btn-send-test'); if (sendBtn) sendBtn.disabled = false;
-            if (btn) btn.textContent = 'Suscrito';
-        } catch (e) {
-            console.error('subscribeToPush error', e);
-            showModal('Push', 'No se pudo suscribir a Push: ' + (e.message || e));
-            if (btn) { btn.disabled = false; btn.textContent = 'Activar Notificaciones'; }
-        }
-    }
+            showModal('Push', 'Suscripción creada correctamente');
+            const sendBtn = $('btn-send-test'); if (sendBtn) sendBtn.disabled = false;
+            if (btn) btn.textContent = 'Suscrito';
+        } catch (e) {
+            console.error('subscribeToPush error', e);
+            showModal('Push', 'No se pudo suscribir a Push: ' + (e.message || e));
+            if (btn) { btn.disabled = false; btn.textContent = 'Activar Notificaciones'; }
+        }
+    }
 
     async function sendTestNotification() {
         const btn = $('btn-send-test'); if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
