@@ -4,7 +4,7 @@
   "description": "PWA de Emergencias con Web Push",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js" 
+    "start": "node server/server.js" 
   },
   "dependencies": {
     "web-push": "^3.6.7",
