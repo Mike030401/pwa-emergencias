@@ -17,9 +17,6 @@ const STATIC_ASSETS = [
     // mapas
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
-    
-    // El mapa requiere este JS adicional para funcionar modularmente
-    "/js/maps.js",
 
     // iconos
     "/icons/icon-72.png",
