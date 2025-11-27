@@ -4,7 +4,7 @@ const DYNAMIC_CACHE = "dynamic-v2";
 const STATIC_ASSETS = [
     "/",
     "/index.html",
-    "/js/app.js",
+    "/app.js",
     "/css/styles.css",
     "/manifest.json",
 
