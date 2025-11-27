@@ -189,6 +189,7 @@ app.post("/send-notification", async (req, res) => {
 //   LEVANTAR SERVIDOR
 // ==============================
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
+// ¡CRÍTICO!: Escuchar en 0.0.0.0 para que Render pueda acceder al puerto.
+app.listen(PORT, '0.0.0.0', () => { 
+    console.log(`🚀 Servidor escuchando en puerto ${PORT} en todas las interfaces.`);
 });
