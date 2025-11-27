@@ -6,13 +6,9 @@
 
     <title>Login - Emergencias SM Tlalancaleca</title>
 
-    <!-- Iconos -->
     <link rel="icon" href="icons/icon-192.png">
-
-    <!-- Manifest -->
     <link rel="manifest" href="manifest.json">
 
-    <!-- Estilos básicos -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -72,7 +68,7 @@
             background: #a23328;
         }
 
-        #offlineAlert {
+        #offlineAlert, #login-error-message {
             display: none;
             margin-bottom: 10px;
             padding: 10px;
@@ -88,20 +84,30 @@
 
     <div class="login-container">
 
-        <div id="offlineAlert">Estás sin conexión</div>
+        <div id="offlineAlert">Estás sin conexión. Solo podrás usar la aplicación si ya habías iniciado sesión.</div>
+        <div id="login-error-message"></div>
 
         <h2>Iniciar sesión</h2>
+        
+        <form id="login-form">
+            <input type="email" id="email" placeholder="Correo electrónico" autocomplete="username" required />
+            <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" required />
 
-        <input type="text" id="email" placeholder="Correo electrónico" autocomplete="username" />
-        <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" />
+            <button type="submit" id="btn-login-submit">Ingresar</button>
+        </form>
 
-        <button onclick="login()">Ingresar</button>
         <button class="google-btn" onclick="loginGoogle()">Iniciar con Google</button>
 
     </div>
 
+    <script src="/js/app.js"></script>
+
     <script>
-        // Detectar conexión
+        // ===================================
+        // LÓGICA DE DETECCIÓN Y CONEXIÓN
+        // ===================================
+
+        // Detección de conexión
         function revisarConexion() {
             const alertBox = document.getElementById("offlineAlert");
             if (!navigator.onLine) {
@@ -115,30 +121,49 @@
         window.addEventListener("online", revisarConexion);
         window.addEventListener("offline", revisarConexion);
 
-        // --- LOGIN NORMAL ---
-        function login() {
+        // --- MANEJO DE ENVÍO DEL FORMULARIO ---
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault(); 
+            
             const email = document.getElementById("email").value.trim();
             const password = document.getElementById("password").value.trim();
+            const errorMessage = document.getElementById('login-error-message');
+            
+            // Ocultar mensaje de error previo
+            errorMessage.style.display = 'none';
+            errorMessage.textContent = '';
+
 
             if (email === "" || password === "") {
-                alert("Completa todos los campos.");
+                errorMessage.textContent = "Completa todos los campos.";
+                errorMessage.style.display = 'block';
                 return;
             }
 
-            // Aquí va la conexión a Spring Boot (API)
-            alert("Login enviado → Conectar con backend aquí.");
-        }
+            // Llamar a la función expuesta por app.js
+            if (window.App && typeof window.App.authenticate === 'function') {
+                // Aquí llamamos a la función que debe manejar el fetch, guardar la sesión y redirigir
+                const success = await window.App.authenticate(email, password);
+                
+                // Si la función retorna 'false' (indicando error de credenciales)
+                if (success === false) {
+                    errorMessage.textContent = "Credenciales inválidas. Intenta de nuevo.";
+                    errorMessage.style.display = 'block';
+                }
 
-        // --- LOGIN CON GOOGLE ---
+            } else {
+                alert('Error: El archivo app.js no se cargó correctamente o la función authenticate no está expuesta.');
+            }
+        });
+
+        // --- LOGIN CON GOOGLE (Lógica placeholder) ---
         function loginGoogle() {
-            alert("Google Login → después lo conectamos con Firebase o Google Identity.");
+            alert("Google Login → Pendiente de implementación con API externa.");
         }
-
-        // Registrar Service Worker
-        if ("serviceWorker" in navigator) {
-            navigator.serviceWorker.register("service-worker.js")
-            .catch(err => console.log("SW error:", err));
-        }
+        
+        // El Service Worker ya no necesita registrarse aquí, lo hará app.js o el Service Worker se registrará automáticamente 
+        // desde index.html o un punto central que ya lo tenga registrado (que es el caso en PWA).
+        // Dejaremos la lógica de SW en app.js para simplificar.
     </script>
 
 </body>

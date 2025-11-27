@@ -60,14 +60,20 @@
     safeAddListener('modal-close', 'click', closeModal);
 
     /* ---------- SIMPLE AUTH (demo + optional backend) ---------- */
-    function getSavedUser() {
-        try { return JSON.parse(localStorage.getItem('pwaUser')); } catch (e) { return null; }
-    }
-    function saveUser(u) { localStorage.setItem('pwaUser', JSON.stringify(u)); }
-    function clearUser() { localStorage.removeItem('pwaUser'); }
+// --- app.js (Fragmento a SUSTITUIR) ---
 
-    function applyUserToUI(user) {
-        if (!user) return;
+// Mantener estas funciones igual
+function getSavedUser() {
+    try { return JSON.parse(localStorage.getItem('pwaUser')); } catch (e) { return null; }
+}
+function saveUser(u) { localStorage.setItem('pwaUser', JSON.stringify(u)); }
+function clearUser() { localStorage.removeItem('pwaUser'); }
+
+// Mantener applyUserToUI igual, pero la usaremos después de la redirección
+function applyUserToUI(user) {
+    if (!user) return;
+    // La lógica de aplicar UI solo es relevante en index.html
+    if (exists('incidents-container')) {
         const btnLogout = $('btn-logout');
         if (btnLogout) btnLogout.classList.remove('hidden');
         const roleLabel = $('label-role');
@@ -75,7 +81,11 @@
         const status = $('pwa-status');
         if (status) status.textContent = `Usuario: ${user.email || user.role || 'operador'}`;
     }
-    function removeUserFromUI() {
+}
+// Mantener removeUserFromUI igual
+function removeUserFromUI() {
+    // La lógica de remover UI solo es relevante en index.html
+    if (exists('incidents-container')) {
         const btnLogout = $('btn-logout');
         if (btnLogout) btnLogout.classList.add('hidden');
         const roleLabel = $('label-role');
@@ -83,72 +93,101 @@
         const status = $('pwa-status');
         if (status) status.textContent = 'Sin sesión';
     }
+}
 
-    async function tryLoginServer(email, password) {
-        if (!API.login) return null;
-        try {
-            const r = await fetch(API.login, {
-                method: 'POST', headers: {'content-type':'application/json'},
-                body: JSON.stringify({ email, password })
-            });
-            if (!r.ok) return null;
-            const j = await r.json();
-            if (j && j.ok && j.user) return j.user;
-            return null;
-        } catch (e) {
-            return null;
+// Mantener tryLoginServer igual
+async function tryLoginServer(email, password) {
+    if (!API.login) return null;
+    try {
+        const r = await fetch(API.login, {
+            method: 'POST', headers: {'content-type':'application/json'},
+            body: JSON.stringify({ email, password })
+        });
+        if (!r.ok) return null;
+        const j = await r.json();
+        if (j && j.ok && j.user) return j.user;
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<boolean>} Retorna true si el login fue exitoso, false si falló.
+ */
+async function authenticate(email, password) {
+    // 1. Intentar backend
+    let user = await tryLoginServer(email, password);
+    
+    // 2. Fallback a demo users
+    if (!user) {
+        const demoUsers = [
+            { email: 'policia@emergencias.com', password: '123456', role: 'policia' },
+            { email: 'bombero@emergencias.com', password: '123456', role: 'bombero' },
+            { email: 'medico@emergencias.com', password: '123456', role: 'medico' }
+        ];
+        const found = demoUsers.find(u => u.email === email && u.password === password);
+        if (found) user = { email: found.email, role: found.role };
+    }
+
+    if (user) {
+        saveUser(user);
+        applyUserToUI(user);
+        // Redirección al éxito
+        window.location.href = '/index.html'; 
+        return true;
+    } else {
+        // Falló la autenticación
+        return false;
+    }
+}
+
+// initAuth SIMPLIFICADO para solo manejar el logout y aplicar el usuario guardado
+function initAuth() {
+    safeAddListener('btn-logout', 'click', () => {
+        clearUser();
+        removeUserFromUI();
+        // Redirigir al login
+        window.location.href = '/login.html'; 
+    });
+    
+    // Aplica el usuario existente
+    const user = getSavedUser();
+    if (user) applyUserToUI(user);
+}
+
+/* ----------------------------------------------------- */
+/* ---------- CONTROL DE FLUJO DE SESIÓN ---------- */
+/* ----------------------------------------------------- */
+
+/**
+ * Verifica la sesión y redirige al usuario si está en la página incorrecta.
+ * @returns {boolean} True si hubo una redirección, false si no.
+ */
+function checkAuthAndRedirect() {
+    const user = getSavedUser();
+    const path = window.location.pathname;
+    
+    const isLoginPage = path.includes('login.html');
+    const isDashboard = path.includes('index.html') || path === '/';
+    
+    if (user) {
+        // Usuario AUTENTICADO: Redirigir siempre al dashboard si intenta ver el login
+        if (isLoginPage) {
+            window.location.href = '/index.html';
+            return true;
+        }
+    } else {
+        // Usuario NO AUTENTICADO: Redirigir siempre al login si intenta ver el dashboard
+        if (isDashboard) {
+            window.location.href = '/login.html';
+            return true;
         }
     }
-
-    function initAuth() {
-        // buttons
-        safeAddListener('btn-open-login', 'click', () => {
-            const lm = $('loginModal'); if (!lm) return;
-            lm.classList.remove('hidden'); lm.classList.add('flex');
-        });
-        safeAddListener('loginCancel', 'click', () => {
-            const lm = $('loginModal'); if (!lm) return;
-            lm.classList.add('hidden'); lm.classList.remove('flex');
-        });
-
-        safeAddListener('loginSubmit', 'click', async () => {
-            const email = $('loginEmail') ? $('loginEmail').value.trim() : '';
-            const password = $('loginPassword') ? $('loginPassword').value.trim() : '';
-            if (!email || !password) { showModal('Error', 'Completa correo y contraseña'); return; }
-
-            // try backend first
-            const srvUser = await tryLoginServer(email, password);
-            if (srvUser) {
-                saveUser(srvUser);
-                $('loginModal').classList.add('hidden'); $('loginModal').classList.remove('flex');
-                applyUserToUI(srvUser);
-                return;
-            }
-
-            // demo fallback users
-            const demoUsers = [
-                { email: 'policia@emergencias.com', password: '123456', role: 'policia' },
-                { email: 'bombero@emergencias.com', password: '123456', role: 'bombero' },
-                { email: 'medico@emergencias.com', password: '123456', role: 'medico' }
-            ];
-            const found = demoUsers.find(u => u.email === email && u.password === password);
-            if (!found) { showModal('Error', 'Credenciales incorrectas'); return; }
-            const user = { email: found.email, role: found.role };
-            saveUser(user);
-            $('loginModal').classList.add('hidden'); $('loginModal').classList.remove('flex');
-            applyUserToUI(user);
-        });
-
-        safeAddListener('btn-logout', 'click', () => {
-            clearUser();
-            removeUserFromUI();
-            showModal('Sesión', 'Has cerrado sesión');
-        });
-
-        // apply existing user
-        const user = getSavedUser();
-        if (user) applyUserToUI(user);
-    }
+    return false; // No fue redirigido
+}
 
     /* ---------- INDEXEDDB (promisified) ---------- */
     function idbOpen() {
@@ -592,49 +631,59 @@
     }
 
     window.App = window.App || {};
+    window.App.authenticate = authenticate;
     window.App.changeIncidentStatus = changeIncidentStatus;
     window.App.getCachedIncidents = getCachedIncidents; // Necesario para maps.js
     window.App.loadIncidents = loadIncidentsToUI; // Opción para refrescar la lista
 
 
     /* ---------- BOOTSTRAP / INIT ---------- */
-    function wireUI() {
-        safeAddListener('btn-update-incidents', 'click', loadIncidentsToUI);
-        safeAddListener('btn-refresh', 'click', loadIncidentsToUI);
-        // La lógica de centrar usuario y reportar está en maps.js ahora
-        // safeAddListener('btn-center-me', 'click', centerOnUser);
-        // safeAddListener('btn-report-emergency', 'click', reportMyLocation);
+    // --- app.js (Fragmento de BOOTSTRAP / INIT - SUSTITUIR COMPLETO) ---
+
+async function init() {
+    // 1. Verificar la autenticación y hacer la redirección si es necesario.
+    if (checkAuthAndRedirect()) {
+        // Si fue redirigido (por ejemplo, de / a /login), detenemos la inicialización del dashboard.
+        return;
     }
+    
+    // 2. Si llegamos aquí, estamos en index.html Y estamos logueados.
+    wireUI();
+    initAuth(); // Inicializa el botón de logout y aplica la UI.
 
-    async function init() {
-        wireUI();
-        initAuth();
+    await registerServiceWorker();
 
-        await registerServiceWorker();
+    // Carga de incidentes inicial
+    await loadIncidentsToUI();
+    
+    // try to flush outbox if online
+    if (navigator.onLine) await flushOutbox();
+}
 
-        // Carga de incidentes inicial
-        await loadIncidentsToUI();
-        
-        // El mapa debe iniciar en maps.js después de que app.js haya cargado
-        // y expuesto window.App.getCachedIncidents
-
-        // try to flush outbox if online
-        if (navigator.onLine) await flushOutbox();
-    }
-
-    // start when DOM is loaded
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
-
-    // close modals on Esc
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeModal();
-            const lm = $('loginModal'); if (lm) { lm.classList.add('hidden'); lm.classList.remove('flex'); }
+// start when DOM is loaded
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+         // Solo intentamos inicializar el dashboard si estamos en index.html
+        if (exists('mapid') || exists('incidents-container')) {
+            init();
+        } else if (window.location.pathname.includes('login.html')) {
+            // Si estamos en login.html, solo necesitamos la lógica de redirección
+            checkAuthAndRedirect();
         }
     });
+} else {
+     if (exists('mapid') || exists('incidents-container')) {
+         init();
+     } else if (window.location.pathname.includes('login.html')) {
+         checkAuthAndRedirect();
+     }
+}
+
+// close modals on Esc
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeModal();
+    }
+});
 
 })(); // EOF
