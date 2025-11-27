@@ -3,7 +3,7 @@
     - Registro Service Worker
     - IndexedDB (incidentes + cola de reportes offline)
     - Carga y render de incidentes
-    - Leaflet map + marcadores + centrar usuario + reportar ubicación
+    - Leaflet map + marcadores + centrar usuario + reportar ubicación (Asumiendo maps.js)
     - Login (backend fallback + demo users)
     - Push subscription (VAPID) + envío al servidor
     - Manejo offline / reintentos (incluyendo acciones del operador)
@@ -22,8 +22,8 @@
         emergencias: '/api/emergencias',
         report: ['/api/reportar', '/api/report', '/api/reportar-emergencia'], // try these in order
         changeStatus: '/api/emergencia/estado', // NUEVO ENDPOINT
-        subscribe: '/save-subscription', // Ajustado a la convención del backend
-        sendNotification: '/send-notification', // Ajustado a la convención del backend
+        subscribe: '/save-subscription', 
+        sendNotification: '/send-notification', 
         vapidKey: '/vapidPublicKey',
         login: '/api/login'
     };
@@ -60,136 +60,163 @@
     safeAddListener('modal-close', 'click', closeModal);
 
     /* ---------- SIMPLE AUTH (demo + optional backend) ---------- */
-// --- app.js (Fragmento a SUSTITUIR) ---
 
-// Mantener estas funciones igual
-function getSavedUser() {
-    try { return JSON.parse(localStorage.getItem('pwaUser')); } catch (e) { return null; }
-}
-function saveUser(u) { localStorage.setItem('pwaUser', JSON.stringify(u)); }
-function clearUser() { localStorage.removeItem('pwaUser'); }
-
-// Mantener applyUserToUI igual, pero la usaremos después de la redirección
-function applyUserToUI(user) {
-    if (!user) return;
-    // La lógica de aplicar UI solo es relevante en index.html
-    if (exists('incidents-container')) {
-        const btnLogout = $('btn-logout');
-        if (btnLogout) btnLogout.classList.remove('hidden');
-        const roleLabel = $('label-role');
-        if (roleLabel) roleLabel.textContent = user.role ? `(${user.role})` : '';
-        const status = $('pwa-status');
-        if (status) status.textContent = `Usuario: ${user.email || user.role || 'operador'}`;
-    }
-}
-// Mantener removeUserFromUI igual
-function removeUserFromUI() {
-    // La lógica de remover UI solo es relevante en index.html
-    if (exists('incidents-container')) {
-        const btnLogout = $('btn-logout');
-        if (btnLogout) btnLogout.classList.add('hidden');
-        const roleLabel = $('label-role');
-        if (roleLabel) roleLabel.textContent = '';
-        const status = $('pwa-status');
-        if (status) status.textContent = 'Sin sesión';
-    }
-}
-
-// Mantener tryLoginServer igual
-async function tryLoginServer(email, password) {
-    if (!API.login) return null;
-    try {
-        const r = await fetch(API.login, {
-            method: 'POST', headers: {'content-type':'application/json'},
-            body: JSON.stringify({ email, password })
-        });
-        if (!r.ok) return null;
-        const j = await r.json();
-        if (j && j.ok && j.user) return j.user;
-        return null;
-    } catch (e) {
-        return null;
-    }
-}
-
-/**
- * @param {string} email
- * @param {string} password
- * @returns {Promise<boolean>} Retorna true si el login fue exitoso, false si falló.
- */
-async function authenticate(email, password) {
-    // 1. Intentar backend
-    let user = await tryLoginServer(email, password);
-    
-    // 2. Fallback a demo users
-    if (!user) {
-        const demoUsers = [
-            { email: 'policia@emergencias.com', password: '123456', role: 'policia' },
-            { email: 'bombero@emergencias.com', password: '123456', role: 'bombero' },
-            { email: 'medico@emergencias.com', password: '123456', role: 'medico' }
-        ];
-        const found = demoUsers.find(u => u.email === email && u.password === password);
-        if (found) user = { email: found.email, role: found.role };
-    }
-
-    if (user) {
-        saveUser(user);
-        applyUserToUI(user);
-        // Redirección al éxito
-        window.location.href = '/index.html'; 
-        return true;
-    } else {
-        // Falló la autenticación
-        return false;
-    }
-}
-
-// initAuth SIMPLIFICADO para solo manejar el logout y aplicar el usuario guardado
-function initAuth() {
-    safeAddListener('btn-logout', 'click', () => {
-        clearUser();
-        removeUserFromUI();
-        // Redirigir al login
-        window.location.href = '/login.html'; 
-    });
-    
-    // Aplica el usuario existente
-    const user = getSavedUser();
-    if (user) applyUserToUI(user);
-}
-
-/* ----------------------------------------------------- */
-/* ---------- CONTROL DE FLUJO DE SESIÓN ---------- */
-/* ----------------------------------------------------- */
-
-/**
- * Verifica la sesión y redirige al usuario si está en la página incorrecta.
- * @returns {boolean} True si hubo una redirección, false si no.
- */
-function checkAuthAndRedirect() {
-    const user = getSavedUser();
-    const path = window.location.pathname;
-    
-    const isLoginPage = path.includes('login.html');
-    const isDashboard = path.includes('index.html') || path === '/';
-    
-    if (user) {
-        // Usuario AUTENTICADO: Redirigir siempre al dashboard si intenta ver el login
-        if (isLoginPage) {
-            window.location.href = '/index.html';
-            return true;
-        }
-    } else {
-        // Usuario NO AUTENTICADO: Redirigir siempre al login si intenta ver el dashboard
-        if (isDashboard) {
-            window.location.href = '/login.html';
-            return true;
+    function getSavedUser() {
+        try { 
+            const userString = localStorage.getItem('pwaUser');
+            if (!userString) return null;
+            return JSON.parse(userString); 
+        } catch (e) { 
+            localStorage.removeItem('pwaUser'); // Dato corrupto
+            return null; 
         }
     }
-    return false; // No fue redirigido
-}
+    function saveUser(u) { localStorage.setItem('pwaUser', JSON.stringify(u)); }
+    function clearUser() { localStorage.removeItem('pwaUser'); }
+
+    function applyUserToUI(user) {
+        if (!user) return;
+        // La lógica de aplicar UI solo es relevante en index.html
+        if (exists('incidents-container')) {
+            const btnLogout = $('btn-logout');
+            if (btnLogout) btnLogout.classList.remove('hidden');
+            const roleLabel = $('label-role');
+            // Corregido para que muestre el rol solo si existe
+            if (roleLabel) roleLabel.textContent = user.role ? `(${user.role})` : '';
+            const status = $('pwa-status');
+            if (status) status.textContent = `Usuario: ${user.email || user.role || 'operador'}`;
+        }
+    }
+
+    function removeUserFromUI() {
+        // La lógica de remover UI solo es relevante en index.html
+        if (exists('incidents-container')) {
+            const btnLogout = $('btn-logout');
+            if (btnLogout) btnLogout.classList.add('hidden');
+            const roleLabel = $('label-role');
+            if (roleLabel) roleLabel.textContent = '';
+            const status = $('pwa-status');
+            if (status) status.textContent = 'Service Worker: Registrado'; // Estado inicial de SW
+        }
+    }
+
+    async function tryLoginServer(email, password) {
+        if (!API.login) return null;
+        try {
+            const r = await fetch(API.login, {
+                method: 'POST', headers: {'content-type':'application/json'},
+                body: JSON.stringify({ email, password })
+            });
+            if (!r.ok) return null;
+            const j = await r.json();
+            if (j && j.ok && j.user) return j.user;
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * @param {string} email
+     * @param {string} password
+     * @returns {Promise<boolean>} Retorna true si el login fue exitoso, false si falló.
+     */
+    async function authenticate(email, password) {
+        // 1. Intentar backend
+        let user = await tryLoginServer(email, password);
+        
+        // 2. Fallback a demo users
+        if (!user) {
+            const demoUsers = [
+                { email: 'policia@emergencias.com', password: '123456', role: 'policia' },
+                { email: 'bombero@emergencias.com', password: '123456', role: 'bombero' },
+                { email: 'medico@emergencias.com', password: '123456', role: 'medico' }
+            ];
+            const found = demoUsers.find(u => u.email === email && u.password === password);
+            // Corregido: Si encontró al demo user, crea un objeto simple
+            if (found) user = { email: found.email, role: found.role };
+        }
+
+        if (user) {
+            saveUser(user);
+            applyUserToUI(user);
+            // Redirección al éxito
+            window.location.href = '/index.html'; 
+            return true;
+        } else {
+            // Falló la autenticación
+            return false;
+        }
+    }
+
+    function initAuth() {
+        // Solo para index.html (dashboard)
+        if (exists('btn-logout')) {
+            safeAddListener('btn-logout', 'click', () => {
+                clearUser();
+                removeUserFromUI();
+                // Redirigir al login
+                window.location.href = '/login.html'; 
+            });
+            
+            // Aplica el usuario existente
+            const user = getSavedUser();
+            if (user) applyUserToUI(user);
+        }
+        
+        // Solo para login.html
+        if (exists('loginSubmit')) {
+            safeAddListener('loginSubmit', 'click', async () => {
+                const email = $('loginEmail')?.value?.trim() || '';
+                const password = $('loginPassword')?.value?.trim() || '';
+                
+                // Muestra un mensaje en la UI de login si falta algo
+                if (!email || !password) { showModal('Error', 'Completa correo y contraseña'); return; }
+                
+                const success = await authenticate(email, password);
+                if (!success) {
+                    showModal('Error', 'Credenciales incorrectas o el servidor no responde.');
+                }
+            });
+        }
+    }
+
+
+    /* ----------------------------------------------------- */
+    /* ---------- CONTROL DE FLUJO DE SESIÓN ---------- */
+    /* ----------------------------------------------------- */
+
+    /**
+     * Verifica la sesión y redirige al usuario si está en la página incorrecta.
+     * @returns {boolean} True si hubo una redirección, false si no.
+     */
+    function checkAuthAndRedirect() {
+        const user = getSavedUser();
+        const path = window.location.pathname;
+        
+        const isLoginPage = path.includes('login.html');
+        // El dashboard es index.html o la raíz /
+        const isDashboard = path.includes('index.html') || path === '/'; 
+        
+        if (user) {
+            // Usuario AUTENTICADO: Redirigir siempre al dashboard si intenta ver el login
+            if (isLoginPage) {
+                window.location.href = '/index.html';
+                return true;
+            }
+        } else {
+            // Usuario NO AUTENTICADO: Redirigir siempre al login si intenta ver el dashboard
+            if (isDashboard) {
+                window.location.href = '/login.html';
+                return true;
+            }
+        }
+        return false; // No fue redirigido
+    }
 
     /* ---------- INDEXEDDB (promisified) ---------- */
+    // ... (El código de IndexedDB es correcto y se mantiene igual)
+
     function idbOpen() {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_NAME, DB_VER);
@@ -236,9 +263,15 @@ function checkAuthAndRedirect() {
             try {
                 const tx = db.transaction(STORE_QUEUE, 'readwrite');
                 const os = tx.objectStore(STORE_QUEUE);
-                os.add(payload);
+                // Corregido: el payload de la cola offline debe incluir el endpoint para el Service Worker
+                const queueItem = {
+                    body: payload.body || payload, // Asume que el payload original es el body, si no se especifica.
+                    url: payload.url,
+                    method: payload.method || 'POST',
+                    timestamp: Date.now()
+                };
+                os.add(queueItem);
                 tx.oncomplete = async () => {
-                    // CRUCIAL: Registrar el sync después de guardar
                     if ('serviceWorker' in navigator && 'SyncManager' in window) {
                         const registration = await navigator.serviceWorker.ready;
                         registration.sync.register('sync-report-queue');
@@ -264,31 +297,27 @@ function checkAuthAndRedirect() {
     
     /* ---------- OPERATOR ACTIONS (changeStatus: send or queue) ---------- */
 
-async function trySendStatusUpdate(payload) {
-    if (!API.changeStatus) return false;
-    
-    // 1. Obtener datos del usuario logueado
-    const user = getSavedUser(); 
-    // **IMPORTANTE**: Asume que tu backend devuelve un 'token' en el objeto de usuario. 
-    // Si tu backend usa otro nombre o método, ajústalo aquí. Si solo usa el rol, envíalo.
-    const token = user ? user.token : null; 
+    async function trySendStatusUpdate(payload) {
+        if (!API.changeStatus) return false;
+        
+        const user = getSavedUser(); 
+        const token = user ? user.token : null; 
 
-    try {
-        const r = await fetch(API.changeStatus, { 
-            method: 'POST', 
-            headers: {
-                'content-type':'application/json',
-                // 2. AÑADIR EL HEADER DE AUTORIZACIÓN 
-                // (EJEMPLO JWT - AJUSTAR SEGÚN TU BACKEND)
-                'Authorization': token ? `Bearer ${token}` : '' 
-            }, 
-            body: JSON.stringify(payload) 
-        });
-        return r.ok;
-    } catch (e) {
-        return false; // Error de red
-    }
-}
+        try {
+            const r = await fetch(API.changeStatus, { 
+                method: 'POST', 
+                headers: {
+                    'content-type':'application/json',
+                    // Importante: si no usas JWT, ajusta este header (e.g., usa un 'x-user-role': user.role)
+                    'Authorization': token ? `Bearer ${token}` : '' 
+                }, 
+                body: JSON.stringify(payload) 
+            });
+            return r.ok;
+        } catch (e) {
+            return false; // Error de red
+        }
+    }
 
     /**
      * Lógica central para cambiar el estado de un incidente (usado por botones de UI).
@@ -302,7 +331,7 @@ async function trySendStatusUpdate(payload) {
             estado: newStatus 
         };
 
-        // La acción para la cola offline
+        // El objeto de acción para la cola offline debe incluir el endpoint y el body
         const action = {
             url: API.changeStatus,
             method: 'POST',
@@ -325,9 +354,9 @@ async function trySendStatusUpdate(payload) {
             showModal('Guardado Local', 'Ocurrió un error. Se guardó localmente para reintento posterior.');
         }
         
-        // Refrescar UI
+        // Refrescar UI (si estamos en index.html)
         await loadIncidentsToUI();
-        // Si tienes maps.js cargado, también lo refrescamos (se llama a través de window.App)
+        // Si tienes maps.js cargado, también lo refrescamos
         if (window.Map && typeof window.Map.loadEmergenciesFromCache === 'function') {
             window.Map.loadEmergenciesFromCache();
         }
@@ -339,7 +368,7 @@ async function trySendStatusUpdate(payload) {
         try {
             let resp = await fetch(API.incidents);
             if (!resp.ok) resp = await fetch(API.emergencias);
-            if (!resp.ok) throw new Error('No OK response');
+            if (!resp.ok) throw new Error('No OK response from API');
             const data = await resp.json();
             return Array.isArray(data) ? data : [];
         } catch (e) {
@@ -349,18 +378,19 @@ async function trySendStatusUpdate(payload) {
 
     async function loadIncidentsToUI() {
         const container = $('incidents-container');
-        if (!container) return;
+        if (!container) return; // Solo se ejecuta si estamos en index.html
         container.innerHTML = `<div class="col-span-full text-center p-8 text-gray-500">Cargando incidentes...</div>`;
         try {
             const data = await fetchIncidentsFromNetwork();
             // save to IDB for offline
             if (data && data.length) {
-                // normalize ids if needed
                 const normalized = data.map(d => {
+                    // Asegura que todos los incidentes tengan un ID para IndexedDB
                     if (!d.id) {
-                        if (d.idincidente) d.id = d.idincidente;
-                        else d.id = `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+                        d.id = d.idincidente || `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
                     }
+                    // Normaliza el estado a mayúsculas
+                    d.status = (d.status || d.estado || 'ABIERTA').toUpperCase();
                     return d;
                 });
                 await idbWrite(STORE_INCIDENTS, normalized);
@@ -382,7 +412,7 @@ async function trySendStatusUpdate(payload) {
         const title = i.title || i.titulo || 'Incidente';
         const desc = i.description || i.descripcion || '';
         const id = i.id || i.idincidente || '—';
-        const status = (i.status || 'ABIERTA').toUpperCase();
+        const status = (i.status || i.estado || 'ABIERTA').toUpperCase(); // Normaliza estado
         
         let statusColor = 'bg-red-500';
         if (status === 'EN_CURSO') statusColor = 'bg-yellow-600';
@@ -407,13 +437,13 @@ async function trySendStatusUpdate(payload) {
             
             <div class="flex gap-2 mt-3 pt-2 border-t border-gray-100">
                 <button onclick="window.App.changeIncidentStatus('${id}', 'EN_CURSO')" 
-                        class="flex-1 px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs disabled:opacity-50"
-                        ${btnAsignarDisabled}>
+                            class="flex-1 px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs disabled:opacity-50"
+                            ${btnAsignarDisabled}>
                 Asignar
                 </button>
                 <button onclick="window.App.changeIncidentStatus('${id}', 'CERRADA')" 
-                        class="flex-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs disabled:opacity-50"
-                        ${btnCerrarDisabled}>
+                            class="flex-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs disabled:opacity-50"
+                            ${btnCerrarDisabled}>
                 Cerrar
                 </button>
             </div>
@@ -427,7 +457,7 @@ async function trySendStatusUpdate(payload) {
         container.innerHTML = '';
         
         // Muestra solo los incidentes que no estén CERRADA
-        const activeList = list.filter(i => (i.status || 'ABIERTA').toUpperCase() !== 'CERRADA');
+        const activeList = list.filter(i => (i.status || i.estado || 'ABIERTA').toUpperCase() !== 'CERRADA');
         
         if (!activeList || activeList.length === 0) {
             container.innerHTML = '<div class="col-span-full text-center p-8 text-gray-500">No hay incidentes activos.</div>';
@@ -438,17 +468,14 @@ async function trySendStatusUpdate(payload) {
         activeList.forEach(i => {
             const cardHtml = renderIncidentCard(i);
             const div = document.createElement('div');
-            // Usamos innerHTML para renderizar la tarjeta y luego solo tomamos el primer elemento
             div.innerHTML = cardHtml; 
             fragment.appendChild(div.firstElementChild); 
         });
         container.appendChild(fragment);
     }
     
-    /* ---------- MAP (Leaflet) - Lógica de mapa movida a maps.js, solo quedan helpers aquí ---------- */
-    // NOTA: Toda la lógica de Leaflet (initMap, loadEmergenciesOnMap, centerOnUser)
-    // debe ser movida a maps.js para evitar duplicidad y asegurar la carga ordenada.
-    // Asumimos que maps.js se cargará después de este archivo.
+    /* ---------- MAP (Leaflet) ---------- */
+    // ... (Se asume que la lógica de mapa está en maps.js o es expuesta globalmente)
     
     /* ---------- REPORT (send or queue) ---------- */
     async function trySendReport(payload) {
@@ -475,17 +502,24 @@ async function trySendStatusUpdate(payload) {
                 timestamp: Date.now()
             };
 
+            // Acción de cola (incluye la URL y el body)
+            const action = {
+                url: API.report[0], // Usamos el primer endpoint como referencia para la cola
+                method: 'POST',
+                body: payload
+            };
+
             // Intentar envío optimista y luego cachear/enrolar en cola
             try {
                 const sent = await trySendReport(payload);
                 if (sent) {
                     showModal('Enviado', 'Tu ubicación fue reportada como emergencia.');
                 } else {
-                    await idbAddToQueue(payload);
+                    await idbAddToQueue(action); // Corregido para usar la estructura de la cola
                     showModal('Guardado local', 'No hay conexión. El reporte se guardó y se enviará al reconectar.');
                 }
             } catch (e) {
-                await idbAddToQueue(payload);
+                await idbAddToQueue(action); // Corregido para usar la estructura de la cola
                 showModal('Guardado local', 'Ocurrió un error. Se guardó localmente para reintento posterior.');
             }
 
@@ -508,14 +542,15 @@ async function trySendStatusUpdate(payload) {
             for (const item of queue) {
                 let ok = false;
                 
-                // Determinar el endpoint correcto para el reintento
+                // Determinar el endpoint correcto para el reintento y usar el body correcto
                 if (item.url === API.changeStatus) {
                     ok = await trySendStatusUpdate(item.body);
                 } else {
+                    // Reporte de emergencia
                     ok = await trySendReport(item.body);
                 }
                 
-                if (!ok) throw new Error('Network fail while flushing');
+                if (!ok) throw new Error('Network fail while flushing'); // Si uno falla, detener y dejar el resto
             }
             
             // if all sent, clear queue
@@ -544,6 +579,8 @@ async function trySendStatusUpdate(payload) {
     });
     
     /* ---------- SERVICE WORKER & PUSH ---------- */
+    // ... (El código de SW y Push es correcto y se mantiene igual)
+
     async function registerServiceWorker() {
         if (!('serviceWorker' in navigator)) {
             const status = $('pwa-status'); if (status) status.textContent = 'Service Worker no soportado';
@@ -592,6 +629,7 @@ async function trySendStatusUpdate(payload) {
             showModal('Push', 'Notificaciones no soportadas en este navegador');
             return;
         }
+        const btn = $('btn-activate-push'); if (btn) { btn.disabled = true; btn.textContent = 'Suscribiendo...'; }
         try {
             const reg = await navigator.serviceWorker.ready;
             const vapid = await getVapidPublicKey();
@@ -606,11 +644,11 @@ async function trySendStatusUpdate(payload) {
 
             showModal('Push', 'Suscripción creada correctamente');
             const sendBtn = $('btn-send-test'); if (sendBtn) sendBtn.disabled = false;
-            const btn = $('btn-activate-push'); if (btn) btn.textContent = 'Suscrito';
+            if (btn) btn.textContent = 'Suscrito';
         } catch (e) {
             console.error('subscribeToPush error', e);
             showModal('Push', 'No se pudo suscribir a Push: ' + (e.message || e));
-            const btn = $('btn-activate-push'); if (btn) { btn.disabled = false; btn.textContent = 'Activar Notificaciones'; }
+            if (btn) { btn.disabled = false; btn.textContent = 'Activar Notificaciones'; }
         }
     }
 
@@ -633,11 +671,7 @@ async function trySendStatusUpdate(payload) {
     safeAddListener('btn-activate-push', 'click', subscribeToPush);
     safeAddListener('btn-send-test', 'click', sendTestNotification);
 
-    /* ---------- EXPOSICIÓN GLOBAL (Para HTML y maps.js) ---------- */
-
-    /**
-     * Expone la lista de incidentes cacheados (para que maps.js la use).
-     */
+    /* ---------- EXPOSICIÓN GLOBAL ---------- */
     async function getCachedIncidents() {
         return await idbReadAll(STORE_INCIDENTS);
     }
@@ -647,59 +681,93 @@ async function trySendStatusUpdate(payload) {
     window.App.changeIncidentStatus = changeIncidentStatus;
     window.App.getCachedIncidents = getCachedIncidents; // Necesario para maps.js
     window.App.loadIncidents = loadIncidentsToUI; // Opción para refrescar la lista
-
-
-/* ---------- BOOTSTRAP / INIT ---------- */
-
-// Nota: La función init() ya no contiene el registro del Service Worker ni el checkAuthAndRedirect
-async function init() {
-    // 1. Aquí ya sabemos que estamos en index.html Y logueados.
-    wireUI(); // Asumimos que esta función existe y cablea la UI del dashboard
-    initAuth(); 
-
-    // Carga de incidentes inicial
-    await loadIncidentsToUI();
-    
-    // try to flush outbox if online
-    if (navigator.onLine) await flushOutbox();
-    
-    // Inicializar el mapa si existe (asumiendo que wireUI llama a initMap en maps.js)
-    if (window.Map && typeof window.Map.initMap === 'function') {
-        window.Map.initMap();
-    }
-}
-
-/**
- * Función principal que se ejecuta inmediatamente para iniciar el flujo.
- */
-function bootstrap() {
-    // 1. Ejecutar el registro del Service Worker SIEMPRE, en cualquier página (login.html o index.html).
-    // Esto resuelve el problema del SW no registrado en login.html.
-    registerServiceWorker(); 
-
-    // 2. Ejecutar la verificación de sesión. Esto maneja la redirección.
-    // Si esta función devuelve true, significa que hubo una redirección y no debemos hacer nada más.
-    if (checkAuthAndRedirect()) {
-        return; // Detenemos la ejecución en caso de redirección.
+    // También expón las funciones del mapa (si están definidas aquí, si no, se asumen en maps.js)
+    if (window.Map) {
+        window.App.centerOnUser = window.Map.centerOnUser;
+        window.App.loadEmergenciesOnMap = window.Map.loadEmergenciesOnMap;
     }
 
-    // 3. Si no hubo redirección, significa que estamos en index.html Y logueados.
-    // Usamos document.readyState para asegurar que el DOM esté listo para wireUI() / init().
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+
+    /* ---------- UI WIRING ---------- */
+
+    // Función para conectar todos los listeners específicos de index.html
+    function wireUI() {
+        // Botones de refresco
+        safeAddListener('btn-update-incidents', 'click', () => { 
+            loadIncidentsToUI(); 
+            if (window.Map && typeof window.Map.loadEmergenciesOnMap === 'function') {
+                window.Map.loadEmergenciesOnMap();
+            }
+        });
+        safeAddListener('btn-refresh', 'click', () => { 
+            loadIncidentsToUI();
+            if (window.Map && typeof window.Map.loadEmergenciesOnMap === 'function') {
+                window.Map.loadEmergenciesOnMap();
+            }
+        });
+        
+        // Botón Mi Ubicación (asumiendo que está en maps.js)
+        if (window.Map && typeof window.Map.centerOnUser === 'function') {
+            safeAddListener('btn-center-me', 'click', window.Map.centerOnUser);
+        }
+
+        // Botón Abrir Login (solo para demo)
+        safeAddListener('btn-open-login', 'click', () => {
+             window.location.href = '/login.html';
+        });
     }
-}
 
-// Empezar el proceso tan pronto como se cargue el script.
-bootstrap(); 
+    /* ---------- BOOTSTRAP / INIT ---------- */
 
-// close modals on Esc
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeModal();
+    async function init() {
+        // Se ejecuta solo en index.html Y logueado
+        wireUI(); 
+        initAuth(); 
+
+        await loadIncidentsToUI();
+        
+        if (navigator.onLine) await flushOutbox();
+        
+        // Inicializar el mapa (asumiendo que maps.js se ha cargado)
+        if (window.Map && typeof window.Map.initMap === 'function') {
+            window.Map.initMap();
+        }
     }
-});
 
-})(); // EOF
+    /**
+     * Función principal que se ejecuta inmediatamente para iniciar el flujo.
+     */
+    function bootstrap() {
+        // 1. Ejecutar el registro del Service Worker en cualquier página.
+        registerServiceWorker(); 
+
+        // 2. Ejecutar la verificación de sesión. Esto maneja la redirección.
+        if (checkAuthAndRedirect()) {
+            return; 
+        }
+
+        // 3. Si no hubo redirección (estamos en index.html Y logueados).
+        // Si estamos en login.html, la lógica de initAuth() ya maneja el submit.
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+        // Inicializar listeners de autenticación (login.html / logout en index.html)
+        initAuth();
+    }
+
+    // Empezar el proceso tan pronto como se cargue el script.
+    bootstrap(); 
+
+    // close modals on Esc
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            // Si tu loginModal no está en app.js, necesitarás el listener aquí si lo mantienes en index.html
+        }
+    });
+
+})();
