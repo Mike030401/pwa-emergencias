@@ -4,7 +4,10 @@ const DYNAMIC_CACHE = "dynamic-v2";
 const STATIC_ASSETS = [
     "/",
     "/index.html",
+    "/login.html",
     "/app.js",
+    "/map.js",
+    "/auth.js",
     "/css/styles.css",
     "/manifest.json",
 
