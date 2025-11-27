@@ -264,19 +264,31 @@ function checkAuthAndRedirect() {
     
     /* ---------- OPERATOR ACTIONS (changeStatus: send or queue) ---------- */
 
-    async function trySendStatusUpdate(payload) {
-        if (!API.changeStatus) return false;
-        try {
-            const r = await fetch(API.changeStatus, { 
-                method: 'POST', 
-                headers: {'content-type':'application/json'}, 
-                body: JSON.stringify(payload) 
-            });
-            return r.ok;
-        } catch (e) {
-            return false; // Error de red
-        }
-    }
+async function trySendStatusUpdate(payload) {
+    if (!API.changeStatus) return false;
+    
+    // 1. Obtener datos del usuario logueado
+    const user = getSavedUser(); 
+    // **IMPORTANTE**: Asume que tu backend devuelve un 'token' en el objeto de usuario. 
+    // Si tu backend usa otro nombre o método, ajústalo aquí. Si solo usa el rol, envíalo.
+    const token = user ? user.token : null; 
+
+    try {
+        const r = await fetch(API.changeStatus, { 
+            method: 'POST', 
+            headers: {
+                'content-type':'application/json',
+                // 2. AÑADIR EL HEADER DE AUTORIZACIÓN 
+                // (EJEMPLO JWT - AJUSTAR SEGÚN TU BACKEND)
+                'Authorization': token ? `Bearer ${token}` : '' 
+            }, 
+            body: JSON.stringify(payload) 
+        });
+        return r.ok;
+    } catch (e) {
+        return false; // Error de red
+    }
+}
 
     /**
      * Lógica central para cambiar el estado de un incidente (usado por botones de UI).
@@ -637,47 +649,51 @@ function checkAuthAndRedirect() {
     window.App.loadIncidents = loadIncidentsToUI; // Opción para refrescar la lista
 
 
-    /* ---------- BOOTSTRAP / INIT ---------- */
-    // --- app.js (Fragmento de BOOTSTRAP / INIT - SUSTITUIR COMPLETO) ---
+/* ---------- BOOTSTRAP / INIT ---------- */
 
+// Nota: La función init() ya no contiene el registro del Service Worker ni el checkAuthAndRedirect
 async function init() {
-    // 1. Verificar la autenticación y hacer la redirección si es necesario.
-    if (checkAuthAndRedirect()) {
-        // Si fue redirigido (por ejemplo, de / a /login), detenemos la inicialización del dashboard.
-        return;
-    }
-    
-    // 2. Si llegamos aquí, estamos en index.html Y estamos logueados.
-    wireUI();
-    initAuth(); // Inicializa el botón de logout y aplica la UI.
-
-    await registerServiceWorker();
+    // 1. Aquí ya sabemos que estamos en index.html Y logueados.
+    wireUI(); // Asumimos que esta función existe y cablea la UI del dashboard
+    initAuth(); 
 
     // Carga de incidentes inicial
     await loadIncidentsToUI();
     
     // try to flush outbox if online
     if (navigator.onLine) await flushOutbox();
+    
+    // Inicializar el mapa si existe (asumiendo que wireUI llama a initMap en maps.js)
+    if (window.Map && typeof window.Map.initMap === 'function') {
+        window.Map.initMap();
+    }
 }
 
-// start when DOM is loaded
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-         // Solo intentamos inicializar el dashboard si estamos en index.html
-        if (exists('mapid') || exists('incidents-container')) {
-            init();
-        } else if (window.location.pathname.includes('login.html')) {
-            // Si estamos en login.html, solo necesitamos la lógica de redirección
-            checkAuthAndRedirect();
-        }
-    });
-} else {
-     if (exists('mapid') || exists('incidents-container')) {
-         init();
-     } else if (window.location.pathname.includes('login.html')) {
-         checkAuthAndRedirect();
-     }
+/**
+ * Función principal que se ejecuta inmediatamente para iniciar el flujo.
+ */
+function bootstrap() {
+    // 1. Ejecutar el registro del Service Worker SIEMPRE, en cualquier página (login.html o index.html).
+    // Esto resuelve el problema del SW no registrado en login.html.
+    registerServiceWorker(); 
+
+    // 2. Ejecutar la verificación de sesión. Esto maneja la redirección.
+    // Si esta función devuelve true, significa que hubo una redirección y no debemos hacer nada más.
+    if (checkAuthAndRedirect()) {
+        return; // Detenemos la ejecución en caso de redirección.
+    }
+
+    // 3. Si no hubo redirección, significa que estamos en index.html Y logueados.
+    // Usamos document.readyState para asegurar que el DOM esté listo para wireUI() / init().
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 }
+
+// Empezar el proceso tan pronto como se cargue el script.
+bootstrap(); 
 
 // close modals on Esc
 document.addEventListener('keydown', (e) => {
