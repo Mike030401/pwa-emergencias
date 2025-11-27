@@ -12,7 +12,7 @@
   <link rel="icon" href="/icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
 
-  <!-- Tailwind (CDN) -->
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Leaflet CSS -->
@@ -21,11 +21,9 @@
   <meta name="theme-color" content="#b30000">
 
   <style>
-    /* Small custom styles */
     body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#f3f4f6; }
     .incident-card { transition: transform .18s, box-shadow .18s; }
-    .incident-card:hover{ transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,.08); }
-    #mapid { height: 100px; min-height: 360px; border-radius: 0.5rem; overflow: hidden; }
+    .incident-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,.08); }
     .modal-hidden { display: none; }
     .btn-disabled { opacity: .5; pointer-events: none; }
   </style>
@@ -53,7 +51,7 @@
   <!-- MAIN -->
   <main class="max-w-7xl mx-auto px-4 pt-24 pb-12">
 
-    <!-- STATUS & VAPID -->
+    <!-- STATUS & CONNECTION -->
     <section class="mb-6 p-4 bg-white rounded-lg shadow">
       <div class="flex items-center justify-between">
         <div class="text-right text-sm text-gray-500">Estado: <span id="connection-label">—</span></div>
@@ -81,7 +79,9 @@
               <button id="btn-report-emergency" class="px-2 py-1 bg-red-600 text-white rounded text-sm">Reportar mi ubicación</button>
             </div>
           </div>
-          <div id="mapid"></div>
+
+          <!-- Contenedor del mapa -->
+          <div id="mapid" class="w-full h-96 rounded-lg overflow-hidden border border-gray-200"></div>
         </div>
       </div>
 
@@ -90,8 +90,7 @@
         <div class="bg-white p-4 rounded-lg shadow">
           <h3 class="font-semibold mb-2">Controles</h3>
           <button id="btn-refresh" class="w-full mb-2 px-3 py-2 bg-gray-800 text-white rounded">Refrescar incidentes</button>
-            <p>Para push: activa notificaciones y luego prueba enviar.</p>
-          </div>
+          <p>Para push: activa notificaciones y luego prueba enviar.</p>
         </div>
 
         <div class="bg-white p-4 rounded-lg shadow mt-4">
@@ -100,7 +99,6 @@
         </div>
       </aside>
     </section>
-
   </main>
 
   <!-- MODAL: mensajes -->
@@ -130,6 +128,8 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="/app.js"></script>
+  <!-- Tu lógica JS -->
+  <script src="/map.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
