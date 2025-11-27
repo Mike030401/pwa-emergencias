@@ -1,7 +1,7 @@
 const CACHE_NAME = "pwa-emergencias-v2";
 const DYNAMIC_CACHE = "dynamic-v2";
 
-// Archivos locales (garantizados)
+// Archivos locales
 const STATIC_ASSETS_LOCAL = [
     "/",
     "/index.html",
@@ -20,7 +20,7 @@ const STATIC_ASSETS_LOCAL = [
     "/icons/icon-512.png",
 ];
 
-// Archivos externos (CORS)
+// Archivos externos (Leaflet)
 const STATIC_ASSETS_EXTERNAL = [
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
     "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
@@ -32,30 +32,30 @@ const STATIC_ASSETS_EXTERNAL = [
 self.addEventListener("install", (event) => {
     console.log("[SW] Instalando…");
 
-    event.waitUntil(
-        (async () => {
-            const cache = await caches.open(CACHE_NAME);
+    event.waitUntil((async () => {
+        const cache = await caches.open(CACHE_NAME);
 
-            // Cachear locales
+        // Cachear locales uno por uno
+        for (const file of STATIC_ASSETS_LOCAL) {
             try {
-                await cache.addAll(STATIC_ASSETS_LOCAL);
-                console.log("[SW] Archivos locales cacheados");
+                await cache.add(file);
+                console.log(`[SW] Archivo local cacheado: ${file}`);
             } catch (err) {
-                console.error("[SW] Error cacheando archivos locales:", err);
+                console.warn(`[SW] No se pudo cachear local: ${file}`, err);
             }
+        }
 
-            // Cachear externos (opcional, seguro)
-            for (const url of STATIC_ASSETS_EXTERNAL) {
-                try {
-                    const response = await fetch(url, { mode: 'cors' });
-                    await cache.put(url, response.clone());
-                    console.log(`[SW] Archivo externo cacheado: ${url}`);
-                } catch (err) {
-                    console.warn(`[SW] No se pudo cachear externo: ${url}`, err);
-                }
+        // Cachear externos (solo si hay CORS)
+        for (const url of STATIC_ASSETS_EXTERNAL) {
+            try {
+                const response = await fetch(url, { mode: 'cors' });
+                await cache.put(url, response.clone());
+                console.log(`[SW] Archivo externo cacheado: ${url}`);
+            } catch (err) {
+                console.warn(`[SW] No se pudo cachear externo: ${url}`, err);
             }
-        })()
-    );
+        }
+    })());
 
     self.skipWaiting();
 });
@@ -89,10 +89,13 @@ async function cacheFirst(req) {
 
     try {
         const fetchResp = await fetch(req);
-        const cache = await caches.open(DYNAMIC_CACHE);
-        cache.put(req, fetchResp.clone());
+        if (req.method === "GET") {
+            const cache = await caches.open(DYNAMIC_CACHE);
+            cache.put(req, fetchResp.clone());
+        }
         return fetchResp;
-    } catch {
+    } catch (err) {
+        console.warn("[SW] Fetch failed, returning offline page", err);
         return caches.match("/pages/offline.html");
     }
 }
@@ -101,8 +104,10 @@ async function cacheFirst(req) {
 async function networkFirst(req) {
     try {
         const fetchResp = await fetch(req);
-        const dynamic = await caches.open(DYNAMIC_CACHE);
-        dynamic.put(req, fetchResp.clone());
+        if (req.method === "GET") {
+            const dynamic = await caches.open(DYNAMIC_CACHE);
+            dynamic.put(req, fetchResp.clone());
+        }
         return fetchResp;
     } catch (err) {
         return caches.match(req) || caches.match("/pages/offline.html");
@@ -166,7 +171,7 @@ async function sendQueuedReports() {
         });
 
         for (const item of allItems) {
-            const { url, method, body } = item;
+            const { url, method, body, id } = item;
             try {
                 const res = await fetch(url, {
                     method: method || "POST",
@@ -174,8 +179,8 @@ async function sendQueuedReports() {
                     body: JSON.stringify(body),
                 });
 
-                if (res.ok) {
-                    store.delete(item.id); // asumimos que item tiene id
+                if (res.ok && id != null) {
+                    store.delete(id); // eliminar solo si tiene id
                     console.log(`[BG Sync] Éxito al enviar ${url}`);
                 }
             } catch (e) {
