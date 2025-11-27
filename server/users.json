@@ -1,0 +1,20 @@
+[
+    {
+        "id": 1,
+        "email": "policia@emergencias.com",
+        "password": "123456",
+        "role": "policia"
+    },
+    {
+        "id": 2,
+        "email": "bombero@emergencias.com",
+        "password": "123456",
+        "role": "bombero"
+    },
+    {
+        "id": 3,
+        "email": "medico@emergencias.com",
+        "password": "123456",
+        "role": "medico"
+    }
+]

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Login - Emergencias SM Tlalancaleca</title>
+
+    <!-- Iconos -->
+    <link rel="icon" href="icons/icon-192.png">
+
+    <!-- Manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- Estilos básicos -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-container {
+            background: #fff;
+            padding: 25px;
+            width: 90%;
+            max-width: 350px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #007bff;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .google-btn {
+            background: #db4437;
+        }
+
+        .google-btn:hover {
+            background: #a23328;
+        }
+
+        #offlineAlert {
+            display: none;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #ff4444;
+            color: white;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-container">
+
+        <div id="offlineAlert">Estás sin conexión</div>
+
+        <h2>Iniciar sesión</h2>
+
+        <input type="text" id="email" placeholder="Correo electrónico" autocomplete="username" />
+        <input type="password" id="password" placeholder="Contraseña" autocomplete="current-password" />
+
+        <button onclick="login()">Ingresar</button>
+        <button class="google-btn" onclick="loginGoogle()">Iniciar con Google</button>
+
+    </div>
+
+    <script>
+        // Detectar conexión
+        function revisarConexion() {
+            const alertBox = document.getElementById("offlineAlert");
+            if (!navigator.onLine) {
+                alertBox.style.display = "block";
+            } else {
+                alertBox.style.display = "none";
+            }
+        }
+
+        window.addEventListener("load", revisarConexion);
+        window.addEventListener("online", revisarConexion);
+        window.addEventListener("offline", revisarConexion);
+
+        // --- LOGIN NORMAL ---
+        function login() {
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value.trim();
+
+            if (email === "" || password === "") {
+                alert("Completa todos los campos.");
+                return;
+            }
+
+            // Aquí va la conexión a Spring Boot (API)
+            alert("Login enviado → Conectar con backend aquí.");
+        }
+
+        // --- LOGIN CON GOOGLE ---
+        function loginGoogle() {
+            alert("Google Login → después lo conectamos con Firebase o Google Identity.");
+        }
+
+        // Registrar Service Worker
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.register("service-worker.js")
+            .catch(err => console.log("SW error:", err));
+        }
+    </script>
+
+</body>
+</html>

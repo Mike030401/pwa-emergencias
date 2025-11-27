@@ -1,354 +1,484 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PWA Emergencias</title>
-    <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/png" href="/icons/icon-72.png">
-    
-    <!-- Carga de Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Estilos personalizados para la tipografía y el fondo */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* Fondo gris claro */
-        }
-        .incident-card {
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .incident-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PWA Emergencias</title>
+
+  <!-- Manifest -->
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- Icons -->
+  <link rel="icon" href="/icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+  <meta name="theme-color" content="#b30000">
+
+  <style>
+    /* Small custom styles */
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#f3f4f6; }
+    .incident-card { transition: transform .18s, box-shadow .18s; }
+    .incident-card:hover{ transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,.08); }
+    #mapid { height: 360px; border-radius: 0.5rem; overflow: hidden; }
+    .modal-hidden { display: none; }
+    .btn-disabled { opacity: .5; pointer-events: none; }
+  </style>
 </head>
+
 <body class="min-h-screen antialiased">
 
-    <!-- App Shell Header -->
-    <header class="bg-red-700 shadow-xl fixed top-0 left-0 w-full z-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex justify-between items-center">
-            <h1 class="text-3xl font-bold text-white tracking-tight">🚨 PWA EMERGENCIAS</h1>
-            <button id="btn-update-incidents" 
-                    class="bg-white text-red-700 font-semibold py-2 px-4 rounded-full shadow-md hover:bg-red-100 transition duration-150 flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 01-1.892.684A5.002 5.002 0 005.999 7H6a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm1 14a1 1 0 00-1-1v-2.101a7.002 7.002 0 0011.601-2.566 1 1 0 00-1.892-.684A5.002 5.002 0 0114.001 13H14a1 1 0 000 2h2a1 1 0 001-1v-2a1 1 0 01-2 0v-.899A7.002 7.002 0 014.399 10.566 1 1 0 016.29 9.882 5.002 5.002 0 0014.001 13H14a1 1 0 010 2H6a1 1 0 01-1-1z" clip-rule="evenodd" />
-                </svg>
-                Actualizar
-            </button>
-        </div>
-    </header>
+  <!-- HEADER -->
+  <header class="bg-red-700 fixed w-full top-0 z-30 shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <h1 class="text-white text-2xl font-bold">🚨 PWA EMERGENCIAS</h1>
+        <span id="label-role" class="text-red-100 text-sm ml-2"></span>
+      </div>
 
-    <!-- Main Content Area -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-
-        <!-- Action Buttons and Push Status -->
-        <section class="mb-8 p-6 bg-white rounded-xl shadow-lg border-t-4 border-red-500">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Configuración PWA y Pruebas</h2>
-            <div id="vapid-key-display" class="text-sm text-gray-500 mb-4">
-                <span class="font-medium text-gray-700">Clave VAPID Pública:</span> Cargando...
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <!-- Botón de Activar Notificaciones -->
-                <button id="btn-activate-push" 
-                        class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition duration-150 flex items-center justify-center disabled:opacity-50"
-                        disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707l-.707-.707V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
-                    </svg>
-                    Activar Notificaciones
-                </button>
-                
-                <!-- Botón de Prueba de Notificación -->
-                <button id="btn-send-test" 
-                        class="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition duration-150 flex items-center justify-center disabled:opacity-50"
-                        disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l4.417-1.473L10 16v3a1 1 0 102 0v-3l2.593 1.378a1 1 0 001.169-1.409l-7-14z" />
-                    </svg>
-                    Enviar Notificación de Prueba
-                </button>
-
-                <!-- Status de la PWA (Placeholder para futuros mensajes) -->
-                <div id="pwa-status" class="flex items-center justify-center bg-yellow-100 text-yellow-800 font-medium py-3 px-6 rounded-lg">
-                    Cargando Service Worker...
-                </div>
-            </div>
-        </section>
-
-        <!-- Incidentes y Contenido Principal -->
-        <section>
-            <h2 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">Incidentes Recientes</h2>
-            
-            <!-- Contenedor de la Lista de Incidentes -->
-            <div id="incidents-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Los incidentes se inyectarán aquí -->
-                <div id="loading-message" class="col-span-full text-center p-8 text-gray-500 text-lg">
-                    Cargando datos. Por favor espera...
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Modals y Mensajes (Para reemplazar alerts) -->
-    <div id="modal-container" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full transform transition-all duration-300 scale-95">
-            <h3 id="modal-title" class="text-xl font-bold text-red-700 mb-3">Mensaje del Sistema</h3>
-            <p id="modal-body" class="text-gray-700 mb-4"></p>
-            <button onclick="closeModal()" class="w-full bg-red-600 text-white font-semibold py-2 rounded-lg hover:bg-red-700 transition">Aceptar</button>
-        </div>
+      <div class="flex items-center gap-3">
+        <button id="btn-update-incidents" class="px-3 py-2 bg-white text-red-700 rounded-full shadow hover:bg-red-50">Actualizar</button>
+        <button id="btn-activate-push" class="px-3 py-2 bg-blue-600 text-white rounded-md disabled:opacity-60" disabled>Activar Notificaciones</button>
+        <button id="btn-send-test" class="px-3 py-2 bg-green-600 text-white rounded-md disabled:opacity-60" disabled>Enviar Prueba</button>
+        <button id="btn-logout" class="px-3 py-2 bg-red-600 text-white rounded-md hidden">Cerrar sesión</button>
+      </div>
     </div>
+  </header>
 
-    <!-- JavaScript para la lógica PWA y UI -->
-    <script type="module">
-        // Importaciones de Firebase (Necesarias para el boilerplate de Canvas)
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+  <!-- MAIN -->
+  <main class="max-w-7xl mx-auto px-4 pt-24 pb-12">
 
-        // Globales del entorno Canvas (MANDATORIO USAR ESTAS VARIABLES)
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const authToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // Variables de Firebase y Usuario
-        let app, db, auth, userId = null;
+    <!-- STATUS & VAPID -->
+    <section class="mb-6 p-4 bg-white rounded-lg shadow">
+      <div class="flex items-center justify-between">
+        <div>
+          <div id="vapid-key-display" class="text-sm text-gray-600">Clave VAPID: <span class="font-mono text-xs text-gray-800">Cargando...</span></div>
+          <div id="pwa-status" class="text-xs text-yellow-700 mt-1">Service Worker: comprobando...</div>
+        </div>
+        <div class="text-right text-sm text-gray-500">Estado: <span id="connection-label">—</span></div>
+      </div>
+    </section>
 
-        // --- UI UTILITIES ---
+    <!-- CONTENT -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        /** Muestra un modal en lugar de usar alert() */
-        function showModal(title, body, color = 'red-700') {
-            document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-title').className = `text-xl font-bold text-${color} mb-3`;
-            document.getElementById('modal-body').textContent = body;
-            document.getElementById('modal-container').classList.remove('hidden');
-            document.getElementById('modal-container').classList.add('flex');
-        }
+      <!-- INCIDENTS LIST -->
+      <div class="lg:col-span-2">
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h2 class="text-xl font-semibold mb-3">Incidentes recientes</h2>
+          <div id="incidents-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div id="loading-message" class="col-span-full text-center text-gray-500 p-8">Cargando datos...</div>
+          </div>
+        </div>
 
-        /** Cierra el modal */
-        window.closeModal = () => {
-            document.getElementById('modal-container').classList.add('hidden');
-            document.getElementById('modal-container').classList.remove('flex');
-        };
+        <!-- MAP -->
+        <div class="mt-6 bg-white p-4 rounded-lg shadow">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-semibold">Mapa de emergencias</h3>
+            <div class="flex gap-2">
+              <button id="btn-center-me" class="px-2 py-1 bg-indigo-600 text-white rounded text-sm">Mi ubicación</button>
+              <button id="btn-report-emergency" class="px-2 py-1 bg-red-600 text-white rounded text-sm">Reportar mi ubicación</button>
+            </div>
+          </div>
+          <div id="mapid"></div>
+        </div>
+      </div>
 
-        /** Renderiza una tarjeta de incidente con estilos Tailwind */
-        function renderIncident(incident) {
-            const isAccidente = incident.title.toLowerCase().includes("accidente");
-            const icon = isAccidente ? 
-                '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" /></svg>' : 
-                '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-600" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.427 2.835-1.427 3.6 0l7.25 13.5A1.5 1.5 0 0118.25 18H1.75a1.5 1.5 0 01-1.373-2.101l7.25-13.5zM9 13a1 1 0 112 0 1 1 0 01-2 0zm0-4a1 1 0 002 0V6a1 1 0 10-2 0v3z" clip-rule="evenodd" /></svg>';
+      <!-- SIDE PANEL -->
+      <aside>
+        <div class="bg-white p-4 rounded-lg shadow">
+          <h3 class="font-semibold mb-2">Controles</h3>
+          <p class="text-sm text-gray-500 mb-3">Usa estos controles para probar la app.</p>
+          <button id="btn-refresh" class="w-full mb-2 px-3 py-2 bg-gray-800 text-white rounded">Refrescar incidentes</button>
+          <button id="btn-open-login" class="w-full mb-2 px-3 py-2 bg-yellow-600 text-white rounded">Abrir Login</button>
+          <div class="mt-4 text-xs text-gray-400">
+            <p>Para push: activa notificaciones y luego prueba enviar.</p>
+          </div>
+        </div>
 
-            const cardHtml = `
-                <div class="incident-card bg-white p-6 rounded-xl shadow-lg border-l-4 ${isAccidente ? 'border-red-500' : 'border-yellow-500'}">
-                    <div class="flex items-center mb-3">
-                        ${icon}
-                        <h3 class="text-xl font-semibold text-gray-800 ml-3">${incident.title}</h3>
-                    </div>
-                    <p class="text-gray-600 mb-4">${incident.description}</p>
-                    <div class="text-xs text-gray-400">ID: ${incident.id} | ${isAccidente ? 'Prioridad Alta' : 'Monitoreo'}</div>
-                </div>
-            `;
-            return cardHtml;
-        }
+        <div class="bg-white p-4 rounded-lg shadow mt-4">
+          <h4 class="font-semibold">Información</h4>
+          <p class="text-sm text-gray-600 mt-2">La app funciona offline usando el Service Worker y IndexedDB. Las notificaciones usan Web Push / VAPID.</p>
+        </div>
+      </aside>
+    </section>
 
-        // --- PWA CORE LOGIC ---
+  </main>
 
-        /** Inicialización de Firebase (Necesaria por el entorno) */
-        async function initFirebase() {
-            if (Object.keys(firebaseConfig).length > 0) {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-            }
-            try {
-                if (authToken) {
-                    const userCredential = await signInWithCustomToken(auth, authToken);
-                    userId = userCredential.user.uid;
-                } else {
-                    const userCredential = await signInAnonymously(auth);
-                    userId = userCredential.user.uid;
-                }
-                document.getElementById('pwa-status').textContent = `Conexión Firebase: OK (Usuario: ${userId.substring(0, 8)}...)`;
-            } catch (error) {
-                console.error("Error en la autenticación de Firebase:", error);
-                document.getElementById('pwa-status').textContent = 'Error en autenticación Firebase.';
-            }
-        }
+  <!-- MODAL: mensajes -->
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-40">
+    <div class="bg-white rounded-lg max-w-md w-full p-4">
+      <h3 id="modal-title" class="text-lg font-bold text-red-700 mb-2">Título</h3>
+      <p id="modal-body" class="text-gray-700 mb-4">Contenido</p>
+      <div class="flex justify-end gap-2">
+        <button id="modal-close" class="px-3 py-2 bg-gray-200 rounded">Cerrar</button>
+      </div>
+    </div>
+  </div>
 
-        /** Inicialización de la DB (Stub para el entorno, usa IDB en el SW) */
-        function initDB() {
-            // En esta PWA, la lógica de IndexedDB está delegada al service-worker.js
-            // y a la función de carga para asegurar que los datos persistan offline.
-            // Aquí solo aseguramos el estado del botón.
-            document.getElementById('pwa-status').textContent = 'SW Registrado | DB: IDB';
-        }
+  <!-- LOGIN MODAL -->
+  <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-lg max-w-sm w-full p-6">
+      <h3 class="text-xl font-semibold mb-3">Iniciar sesión</h3>
+      <input id="loginEmail" type="email" placeholder="Correo" class="w-full mb-2 p-2 border rounded" />
+      <input id="loginPassword" type="password" placeholder="Contraseña" class="w-full mb-4 p-2 border rounded" />
+      <div class="flex gap-2">
+        <button id="loginSubmit" class="flex-1 px-3 py-2 bg-red-600 text-white rounded">Entrar</button>
+        <button id="loginCancel" class="flex-1 px-3 py-2 bg-gray-200 rounded">Cancelar</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">Usuarios demo: policia@... / bombero@... / medico@... (contraseña: 123456)</p>
+    </div>
+  </div>
 
-        /** Carga los incidentes desde la red o IndexedDB (a través del SW) */
-        async function loadIncidents() {
-            const container = document.getElementById('incidents-container');
-            container.innerHTML = '<div id="loading-message" class="col-span-full text-center p-8 text-gray-500 text-lg">Actualizando incidentes...</div>';
-            
-            try {
-                // 1. Intentar cargar desde la red
-                const response = await fetch('/api/incidents');
-                const incidents = await response.json();
-                
-                container.innerHTML = '';
-                if (incidents.length === 0) {
-                     container.innerHTML = '<div class="col-span-full text-center p-8 text-gray-500 text-lg">No hay incidentes reportados actualmente.</div>';
-                } else {
-                    incidents.forEach(incident => {
-                        container.innerHTML += renderIncident(incident);
-                    });
-                    document.getElementById('pwa-status').textContent = 'Datos: Actualizados desde la Red (Online)';
-                }
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-            } catch (error) {
-                // 2. Si la red falla, el Service Worker debería servir la caché dinámica/IDB
-                console.warn('Red no disponible. Intentando cargar desde caché/IndexedDB...');
-                container.innerHTML = '<div class="col-span-full text-center p-8 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-lg">Estás sin conexión. Mostrando datos almacenados localmente.</div>';
+  <!-- MAIN SCRIPT (integrado) -->
+  <script>
+  /**********************
+   * SHORT HELPERS
+   **********************/
+  const $ = id => document.getElementById(id);
+  const showModal = (title, body) => {
+    if (!$('modal')) return alert(title + '\n\n' + body);
+    $('modal-title').textContent = title;
+    $('modal-body').textContent = body;
+    $('modal').classList.remove('hidden'); $('modal').classList.add('flex');
+  };
+  if ($('modal-close')) $('modal-close').addEventListener('click', () => {
+    $('modal').classList.add('hidden'); $('modal').classList.remove('flex');
+  });
 
-                // Simulación de carga desde IDB (En un proyecto real, se llamaría a la función IDB)
-                // Aquí, debido a la delegación al SW, solo mostramos el mensaje de offline.
-                // Los datos reales ya deberían estar en pantalla si el SW funciona correctamente (Cache/Stale-While-Revalidate).
-            }
-        }
+  /**********************
+   * AUTH (Login + Session)
+   **********************/
+  const loginModal = $('loginModal');
+  const loginSubmit = $('loginSubmit');
+  const loginCancel = $('loginCancel');
+  const btnOpenLogin = $('btn-open-login');
+  const btnLogout = $('btn-logout');
+  const labelRole = $('label-role');
 
-        /** Obtiene la VAPID Key para la suscripción */
-        async function getVapidPublicKey() {
-            try {
-                const response = await fetch('/vapidPublicKey');
-                const key = await response.text();
-                document.getElementById('vapid-key-display').innerHTML = `<span class="font-medium text-gray-700">Clave VAPID Pública:</span> <code class="bg-gray-100 text-gray-600 p-1 rounded text-xs">${key.substring(0, 40)}...</code>`;
-                document.getElementById('btn-activate-push').disabled = false; // Habilitar botón
-                return key;
-            } catch (error) {
-                document.getElementById('vapid-key-display').textContent = 'Error al obtener la clave VAPID.';
-                return null;
-            }
-        }
+  if (btnOpenLogin) btnOpenLogin.addEventListener('click', () => {
+    if (!loginModal) return;
+    loginModal.classList.remove('hidden'); loginModal.classList.add('flex');
+  });
+  if (loginCancel) loginCancel.addEventListener('click', () => {
+    if (!loginModal) return;
+    loginModal.classList.add('hidden'); loginModal.classList.remove('flex');
+  });
 
-        /** Convierte la clave VAPID a Uint8Array */
-        function urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
+  async function tryServerLogin(email, password) {
+    try {
+      const resp = await fetch('/api/login', {
+        method: 'POST', headers: {'content-type':'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data && data.ok && data.user ? data.user : null;
+    } catch (e) {
+      console.warn('Login server failed', e);
+      return null;
+    }
+  }
 
-        /** Suscribe al usuario a notificaciones Push */
-        async function activatePush() {
-            const btn = document.getElementById('btn-activate-push');
-            btn.textContent = 'Suscribiendo...';
-            btn.disabled = true;
+  if (loginSubmit) loginSubmit.addEventListener('click', async () => {
+    const email = $('loginEmail')?.value?.trim() || '';
+    const password = $('loginPassword')?.value?.trim() || '';
+    if (!email || !password) { showModal('Error', 'Completa correo y contraseña'); return; }
 
-            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-                showModal('Error', 'Las Notificaciones Push no están soportadas en este navegador.', 'red-700');
-                btn.textContent = 'No Soportado';
-                return;
-            }
+    // 1) Try server
+    const serverUser = await tryServerLogin(email, password);
+    if (serverUser) {
+      localStorage.setItem('pwaUser', JSON.stringify(serverUser));
+      if (loginModal) { loginModal.classList.add('hidden'); loginModal.classList.remove('flex'); }
+      applyUser(serverUser);
+      return;
+    }
 
-            try {
-                const swReg = await navigator.serviceWorker.getRegistration();
-                const applicationServerKey = await getVapidPublicKey();
-                if (!swReg || !applicationServerKey) {
-                    showModal('Error', 'SW o Clave VAPID no disponibles.', 'red-700');
-                    btn.textContent = 'Activar Notificaciones';
-                    return;
-                }
+    // 2) fallback demo users
+    const demoUsers = [
+      { email: 'policia@emergencias.com', password: '123456', role: 'policia' },
+      { email: 'bombero@emergencias.com', password: '123456', role: 'bombero' },
+      { email: 'medico@emergencias.com', password: '123456', role: 'medico' }
+    ];
+    const found = demoUsers.find(u => u.email === email && u.password === password);
+    if (!found) { showModal('Error', 'Credenciales incorrectas'); return; }
+    const user = { email: found.email, role: found.role };
+    localStorage.setItem('pwaUser', JSON.stringify(user));
+    if (loginModal) { loginModal.classList.add('hidden'); loginModal.classList.remove('flex'); }
+    applyUser(user);
+  });
 
-                // Obtener permisos y suscribir
-                const subscription = await swReg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(applicationServerKey)
-                });
+  function applyUser(user) {
+    if (!user) return;
+    if (btnLogout) btnLogout.classList.remove('hidden');
+    if ($('pwa-status')) $('pwa-status').textContent = `Usuario: ${user.email} (rol: ${user.role})`;
+    if (labelRole) labelRole.textContent = `(${user.role})`;
+  }
 
-                // Enviar la suscripción al servidor
-                await fetch('/api/subscribe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(subscription)
-                });
+  // auto-apply if already logged
+  const savedUser = localStorage.getItem('pwaUser');
+  if (savedUser) applyUser(JSON.parse(savedUser));
 
-                showModal('¡Éxito!', 'Suscripción Push creada y enviada al servidor correctamente.', 'green-700');
-                btn.textContent = 'Suscrito (OK)';
-                document.getElementById('btn-send-test').disabled = false;
+  if (btnLogout) btnLogout.addEventListener('click', () => {
+    localStorage.removeItem('pwaUser');
+    if (btnLogout) btnLogout.classList.add('hidden');
+    if (labelRole) labelRole.textContent = '';
+    showModal('Sesión cerrada', 'Has cerrado sesión correctamente');
+  });
 
-            } catch (error) {
-                console.error('Error al activar Notificaciones Push:', error);
-                // Si el error es una denegación, lo manejamos amablemente
-                if (error.name === 'NotAllowedError') {
-                    showModal('Acceso Denegado', 'El usuario ha bloqueado las notificaciones.', 'red-700');
-                } else {
-                    showModal('Error Crítico', `Fallo al suscribir: ${error.message}. Revisa la consola.`, 'red-700');
-                }
-                btn.textContent = 'Activar Notificaciones';
-                btn.disabled = false;
-            }
-        }
+  /**********************
+   * INCIDENTS (load + render)
+   **********************/
+  const incidentsContainer = $('incidents-container');
 
-        /** Envía la notificación de prueba al servidor */
-        async function sendTestNotification() {
-            document.getElementById('btn-send-test').textContent = 'Enviando...';
-            document.getElementById('btn-send-test').disabled = true;
-            try {
-                const response = await fetch('/api/send-test');
-                const result = await response.json();
-                
-                if (result.ok) {
-                    showModal('Prueba Enviada', 'El servidor ha enviado la notificación de prueba.', 'green-700');
-                } else {
-                    showModal('Error Servidor', `Fallo al enviar la prueba: ${result.error}`, 'red-700');
-                }
+  function renderIncidentCard(i) {
+    const isAcc = (i.title || i.titulo || '').toString().toLowerCase().includes('accident') || (i.title || i.titulo || '').toString().toLowerCase().includes('accidente');
+    const title = i.title || i.titulo || 'Incidente';
+    const description = i.description || i.descripcion || '';
+    return `
+      <div class="incident-card bg-white p-4 rounded shadow">
+        <div class="flex items-start gap-3">
+          <div class="text-2xl">${isAcc ? '🚑' : '⚠️'}</div>
+          <div>
+            <h4 class="font-semibold">${title}</h4>
+            <p class="text-sm text-gray-600 mt-1">${description}</p>
+            <div class="text-xs text-gray-400 mt-2">ID: ${i.id || i.idincidente || '—'}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
-            } catch (error) {
-                console.error('Error al contactar el endpoint de prueba:', error);
-                showModal('Fallo de Red', 'No se pudo contactar el servidor para la prueba. Revisa los logs de Render.', 'red-700');
-            }
-            document.getElementById('btn-send-test').textContent = 'Enviar Notificación de Prueba';
-            document.getElementById('btn-send-test').disabled = false;
-        }
+  async function loadIncidents() {
+    if (!incidentsContainer) return;
+    incidentsContainer.innerHTML = '<div class="col-span-full text-center p-8 text-gray-500">Cargando incidentes...</div>';
+    try {
+      let resp = await fetch('/api/incidents');
+      if (!resp.ok) resp = await fetch('/api/emergencias');
+      const data = await resp.json();
+      incidentsContainer.innerHTML = '';
+      if (!data || data.length === 0) {
+        incidentsContainer.innerHTML = '<div class="col-span-full text-center p-8 text-gray-500">No hay incidentes.</div>';
+        if ($('connection-label')) $('connection-label').textContent = 'Online';
+        return;
+      }
+      data.forEach(i => incidentsContainer.innerHTML += renderIncidentCard(i));
+      if ($('connection-label')) $('connection-label').textContent = 'Online';
+    } catch (e) {
+      console.warn('No se pudo cargar incidents:', e);
+      incidentsContainer.innerHTML = '<div class="col-span-full text-center p-8 text-yellow-700 bg-yellow-100 rounded">Estás offline. Muestra datos guardados si los hay.</div>';
+      if ($('connection-label')) $('connection-label').textContent = 'Offline';
+    }
+  }
 
-        // --- INICIALIZACIÓN DE LA PWA ---
+  if ($('btn-update-incidents')) $('btn-update-incidents').addEventListener('click', () => { loadIncidents(); loadEmergenciesOnMap(); });
+  if ($('btn-refresh')) $('btn-refresh').addEventListener('click', () => { loadIncidents(); loadEmergenciesOnMap(); });
 
-        window.addEventListener('load', async () => {
-            // 1. Inicializa Firebase (para el entorno)
-            await initFirebase();
-            
-            // 2. Registra el Service Worker
-            if ('serviceWorker' in navigator) {
-                try {
-                    await navigator.serviceWorker.register('/service-worker.js');
-                    document.getElementById('pwa-status').textContent = 'Service Worker: Registrado OK';
-                } catch (error) {
-                    document.getElementById('pwa-status').textContent = 'Service Worker: Fallo en el registro.';
-                }
-            } else {
-                document.getElementById('pwa-status').textContent = 'Service Worker: No Soportado.';
-            }
+  /**********************
+   * MAP (Leaflet)
+   **********************/
+  let map, userMarker, emergencyMarkers = [];
 
-            // 3. Inicializa la base de datos (IndexedDB/PouchDB)
-            initDB();
+  function initMap() {
+    try {
+      if (!('L' in window)) return console.warn('Leaflet no cargado');
+      map = L.map('mapid', { preferCanvas: true }).setView([19.4326, -99.1332], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+      }).addTo(map);
+      loadEmergenciesOnMap();
+    } catch (err) {
+      console.warn('initMap err', err);
+    }
+  }
 
-            // 4. Obtiene la clave VAPID y carga incidentes
-            await getVapidPublicKey();
-            document.getElementById('btn-activate-push').addEventListener('click', activatePush);
-            document.getElementById('btn-send-test').addEventListener('click', sendTestNotification);
-            document.getElementById('btn-update-incidents').addEventListener('click', loadIncidents);
-            
-            // Carga inicial de datos
-            loadIncidents();
-        });
+  async function loadEmergenciesOnMap() {
+    if (!map) return;
+    try {
+      let resp = await fetch('/api/emergencias');
+      if (!resp.ok) resp = await fetch('/api/incidents');
+      const data = await resp.json();
 
-    </script>
+      // clear previous markers
+      emergencyMarkers.forEach(m => { try { map.removeLayer(m); } catch(e){} });
+      emergencyMarkers = [];
+
+      const bounds = [];
+      data.forEach(e => {
+        const lat = parseFloat(e.lat || e.latitude || e.latitud);
+        const lng = parseFloat(e.lng || e.longitude || e.longitud);
+        if (isNaN(lat) || isNaN(lng)) return;
+        const marker = L.marker([lat, lng]).addTo(map).bindPopup(`<strong>${e.title || e.titulo || 'Incidente'}</strong><br>${e.description || e.descripcion || ''}`);
+        emergencyMarkers.push(marker);
+        bounds.push([lat, lng]);
+      });
+
+      if (bounds.length) {
+        try {
+          const b = L.latLngBounds(bounds);
+          map.fitBounds(b.pad(0.2));
+        } catch (e) { /* ignore */ }
+      }
+    } catch (err) {
+      console.warn('No se pudieron cargar emergencias para el mapa', err);
+    }
+  }
+
+  async function centerOnUser() {
+    if (!navigator.geolocation) { showModal('GPS', 'Geolocalización no soportada'); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      if (map) map.setView([lat, lng], 15);
+      if (userMarker && map) try { map.removeLayer(userMarker); } catch(e){}
+      if (map) userMarker = L.marker([lat, lng]).addTo(map).bindPopup('Tu ubicación').openPopup();
+    }, err => showModal('GPS', 'No se pudo obtener la ubicación: ' + (err.message||err.code)));
+  }
+
+  if ($('btn-center-me')) $('btn-center-me').addEventListener('click', centerOnUser);
+
+  // report user's location as a new emergency
+  if ($('btn-report-emergency')) $('btn-report-emergency').addEventListener('click', async () => {
+    if (!navigator.geolocation) { showModal('GPS', 'Geolocalización no soportada'); return; }
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const payload = {
+        titulo: 'Emergencia reportada (usuario)',
+        descripcion: 'Ubicación enviada por operador',
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        timestamp: Date.now()
+      };
+      try {
+        // prefer endpoint /api/reportar else /api/report
+        await fetch('/api/reportar', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify(payload) });
+      } catch (e) {
+        console.warn('No se pudo enviar reportar:', e);
+        // fallback: store locally? notified to user
+        showModal('Atención', 'No se pudo reportar al servidor. Intenta de nuevo cuando haya conexión.');
+      }
+      await loadIncidents();
+      await loadEmergenciesOnMap();
+      showModal('Enviado', 'Tu ubicación fue reportada como emergencia (local).');
+    }, err => showModal('GPS', 'No se pudo obtener la ubicación'));
+  });
+
+  /**********************
+   * SERVICE WORKER + PUSH (client-side)
+   **********************/
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) { if($('pwa-status')) $('pwa-status').textContent = 'Service Worker no soportado'; return null; }
+    try {
+      const reg = await navigator.serviceWorker.register('/service-worker.js');
+      if ($('pwa-status')) $('pwa-status').textContent = 'Service Worker: Registrado';
+      // enable push button once ready
+      await navigator.serviceWorker.ready;
+      if ($('btn-activate-push')) $('btn-activate-push').disabled = false;
+      return reg;
+    } catch (err) {
+      console.error('Error registrando SW:', err);
+      if ($('pwa-status')) $('pwa-status').textContent = 'Error registrando SW';
+      return null;
+    }
+  }
+
+  async function getVapid() {
+    try {
+      const r = await fetch('/vapidPublicKey');
+      if (!r.ok) throw new Error('No VAPID');
+      const key = await r.text();
+      if ($('vapid-key-display')) $('vapid-key-display').querySelector('span').textContent = key.substring(0,40) + '...';
+      return key;
+    } catch (e) {
+      console.warn('No se obtuvo VAPID:', e);
+      if ($('vapid-key-display')) $('vapid-key-display').textContent = 'Clave VAPID pública: no disponible';
+      return null;
+    }
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map(ch => ch.charCodeAt(0)));
+  }
+
+  async function activatePush() {
+    const btn = $('btn-activate-push');
+    if (btn) { btn.disabled = true; btn.textContent = 'Suscribiendo...'; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const vapidKey = await getVapid();
+      if (!vapidKey) { showModal('Error', 'Clave VAPID no disponible'); if(btn){btn.disabled = false; btn.textContent = 'Activar Notificaciones'}; return; }
+
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidKey) });
+      // send to server -> according to your server: /save-subscription
+      await fetch('/save-subscription', { method: 'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(sub) });
+
+      showModal('Suscripción', 'Notificaciones activadas correctamente.');
+      if ($('btn-send-test')) $('btn-send-test').disabled = false;
+      if (btn) btn.textContent = 'Suscrito';
+    } catch (err) {
+      console.error('activatePush error', err);
+      showModal('Error', 'No fue posible suscribir a push: ' + (err.message||err));
+      if (btn){ btn.disabled = false; btn.textContent = 'Activar Notificaciones'; }
+    }
+  }
+
+  async function sendTestNotification() {
+    const btn = $('btn-send-test');
+    if (btn){ btn.disabled = true; btn.textContent = 'Enviando...'; }
+    try {
+      const resp = await fetch('/send-notification', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ title:'Prueba', body:'Notificación de prueba desde PWA' })});
+      const j = await resp.json();
+      if (j.ok || resp.ok) showModal('Enviado', 'Notificación de prueba enviada.');
+      else showModal('Error', 'Fallo al enviar: ' + JSON.stringify(j));
+    } catch (e) {
+      console.error('sendTestNotification', e);
+      showModal('Error', 'No se pudo contactar al servidor para enviar la prueba.');
+    }
+    if (btn){ btn.disabled = false; btn.textContent = 'Enviar Prueba'; }
+  }
+
+  if ($('btn-activate-push')) $('btn-activate-push').addEventListener('click', activatePush);
+  if ($('btn-send-test')) $('btn-send-test').addEventListener('click', sendTestNotification);
+
+  /**********************
+   * BOOTSTRAP
+   **********************/
+  window.addEventListener('load', async () => {
+    // register SW
+    await registerServiceWorker();
+
+    // init map
+    initMap();
+
+    // load incidents & map markers
+    await loadIncidents();
+    await loadEmergenciesOnMap();
+
+    // open login if not logged
+    const u = localStorage.getItem('pwaUser');
+    if (!u && loginModal) {
+      setTimeout(()=>{ loginModal.classList.remove('hidden'); loginModal.classList.add('flex'); }, 400);
+    } else if (u) {
+      applyUser(JSON.parse(u));
+    }
+  });
+
+  // ESC to close modals
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if ($('modal')) { $('modal').classList.add('hidden'); $('modal').classList.remove('flex'); }
+      if (loginModal) { loginModal.classList.add('hidden'); loginModal.classList.remove('flex'); }
+    }
+  });
+  </script>
 </body>
 </html>
