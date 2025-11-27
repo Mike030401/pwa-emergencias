@@ -25,7 +25,7 @@ function escapeHtml(str) {
     if (window.App && typeof window.App.escapeHtml === 'function') {
         return window.App.escapeHtml(str);
     }
-    return ('' + (str || '')).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return ('' + (str || '')).replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'" :'&#39;'}[m]));
 }
 
 function safeAddListener(id, event, fn) {
@@ -34,40 +34,70 @@ function safeAddListener(id, event, fn) {
 }
 
 /* ===========================================
-   INDEXEDDB HELPERS
+   INDEXEDDB HELPERS (robusto)
 =========================================== */
 function openDB(name = MAP_DB, version = 1) {
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(name, version);
+
         req.onerror = () => reject(req.error);
+
         req.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
         };
-        req.onsuccess = () => resolve(req.result);
+
+        req.onsuccess = async () => {
+            const db = req.result;
+
+            // Verificar que el object store exista (por si la DB vieja no lo tenía)
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                // Cerrar DB actual
+                db.close();
+                // Borrar DB vieja y volver a crear
+                const deleteReq = indexedDB.deleteDatabase(name);
+                deleteReq.onsuccess = () => {
+                    // Reabrir DB para crear store
+                    openDB(name, version).then(resolve).catch(reject);
+                };
+                deleteReq.onerror = () => reject(deleteReq.error);
+                return;
+            }
+
+            resolve(db);
+        };
     });
 }
 
 async function saveMapState({ center, zoom, markers }) {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    await store.clear(); // Limpiar antiguo estado
-    await store.add({ center, zoom, markers });
-    await tx.done;
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        await store.clear(); // Limpiar antiguo estado
+        await store.add({ center, zoom, markers });
+        await tx.done;
+    } catch (e) {
+        console.error("Error guardando estado del mapa:", e);
+    }
 }
 
 async function loadMapState() {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const store = tx.objectStore(STORE_NAME);
-    return new Promise((resolve) => {
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result[0] || null);
-        req.onerror = () => resolve(null);
-    });
+    try {
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        return new Promise((resolve) => {
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result[0] || null);
+            req.onerror = () => resolve(null);
+        });
+    } catch (e) {
+        console.warn("Error cargando estado del mapa:", e);
+        return null;
+    }
 }
 
 /* ===========================================
